@@ -1,4 +1,8 @@
 # Changelog
+## v1.0.4
+
+**Full Changelog**: https://github.com/rudypalaciosIDT/test/commits/v1.0.4
+
 ## v1.0.3
 - [UNF-8870](https://idtjira.atlassian.net/browse/UNF-8870): O8b69 ([#76](https://github.com/rudypalaciosIDT/test/pull/76))
 - [KJP-5016](https://idtjira.atlassian.net/browse/KJP-5016): 2lw62 ([#75](https://github.com/rudypalaciosIDT/test/pull/75))
