@@ -1,4 +1,12 @@
 # Changelog
+## v1.0.3
+- [UNF-8870](https://idtjira.atlassian.net/browse/UNF-8870): O8b69 ([#76](https://github.com/rudypalaciosIDT/test/pull/76))
+- [KJP-5016](https://idtjira.atlassian.net/browse/KJP-5016): 2lw62 ([#75](https://github.com/rudypalaciosIDT/test/pull/75))
+- [#74](https://github.com/rudypalaciosIDT/test/pull/74) main
+- [#73](https://github.com/rudypalaciosIDT/test/pull/73) nextrelease
+
+**Full Changelog**: https://github.com/rudypalaciosIDT/test/commits/v1.0.3
+
 ## v1.0.2
 - [#70](https://github.com/rudypalaciosIDT/test/pull/70) nextrelease
 - [BNJ-3929](https://idtjira.atlassian.net/browse/BNJ-3929): Jes95 ([#69](https://github.com/rudypalaciosIDT/test/pull/69))
