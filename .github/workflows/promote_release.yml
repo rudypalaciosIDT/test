@@ -1,0 +1,135 @@
+name: 2. Promote Release (Remote Repo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      main_branch:
+        description: "Production branch"
+        required: true
+        type: choice
+        options:
+          - main
+          - master
+        default: "main"
+
+      release_branch:
+        description: "Staging branch"
+        required: true
+        type: choice
+        options:
+          - nextrelease
+        default: "nextrelease"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: target_repo
+
+      - name: Checkout automation toolkit
+        uses: actions/checkout@v4
+        with:
+          path: automation
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure Git identity
+        working-directory: target_repo
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout release candidate branch
+        working-directory: target_repo
+        run: |
+          git checkout nextrelease
+          git checkout release/candidate
+
+      - name: Detect current RC version
+        id: detect_rc
+        working-directory: target_repo
+        run: |
+          tag=$(git describe --tags --abbrev=0)
+          release_type=${tag%%-*}
+          echo "[OK] Found: ${release_type}"
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "release_type=${release_type}" >> $GITHUB_OUTPUT
+
+      - name: "Bumping package ${{ steps.detect_rc.outputs.tag }} → ${{ steps.detect_rc.outputs.release_type }}" # Bump to final release version
+        id: bump_release
+        working-directory: target_repo
+        run: |
+          release_version=$(npm version "${{ steps.detect_rc.outputs.release_type }}" --no-git-tag-version)
+          echo "release_version=$release_version" >> $GITHUB_OUTPUT
+
+      - name: Compute release notes
+        id: compute_notes
+        working-directory: target_repo
+        env:
+          REPO_URL: ${{ github.repository }}
+          JIRA_URL: ${{ secrets.JIRA_URL || '' }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          TEMPORARY_RELEASE_BRANCH: "release/candidate"
+          VERSION: ${{ steps.bump_release.outputs.release_version }}
+        run: |
+          chmod +x ../automation/scripts/extract_changelog.sh
+          ../automation/scripts/extract_changelog.sh
+
+      - name: Commit version bump and changelog update
+        working-directory: target_repo
+        env:
+          RELEASE_VERSION: ${{ steps.bump_release.outputs.release_version }}
+        run: |
+          git add package.json Changelog.md
+          git commit -m "Bump to $RELEASE_VERSION and update Changelog.md"
+
+      - name: Promote release
+        id: promote
+        working-directory: target_repo
+        env:
+          VERSION: ${{ steps.bump_release.outputs.release_version }}
+          TEMPORARY_RELEASE_BRANCH: "release/candidate"
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          REPO_URL: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          chmod +x ../automation/scripts/promote_release.sh
+          ../automation/scripts/promote_release.sh
+
+      - name: Create annotated tag and push
+        working-directory: target_repo
+        env:
+          VERSION: ${{ steps.bump_release.outputs.release_version }}
+        run: |
+          echo "[INFO] Creating annotated tag $VERSION"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release (draft prerelease)
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: ${{ github.repository }}
+          tag_name: ${{ steps.bump_release.outputs.release_version }}
+          name: ${{ steps.bump_release.outputs.release_version }}
+          body_path: ${{ steps.compute_notes.outputs.NOTES_FILE }}
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+      - name: Done
+        run: echo "Release promotion complete → version ${{ steps.promote.outputs.release_version }}"

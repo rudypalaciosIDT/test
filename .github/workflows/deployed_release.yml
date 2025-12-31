@@ -1,0 +1,138 @@
+name: 3. Deployed Release (Remote Repo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      main_branch:
+        description: "Production branch"
+        required: true
+        type: choice
+        options:
+          - main
+          - master
+        default: "main"
+
+      release_branch:
+        description: "Staging branch"
+        required: true
+        type: choice
+        options:
+          - nextrelease
+        default: "nextrelease"
+
+      develop_branch:
+        description: "QA branch (base branch for RC)"
+        required: true
+        type: choice
+        options:
+          - nextrelease_qa
+        default: "nextrelease_qa"
+
+env:
+  MAIN_BRANCH: ${{ github.event.inputs.main_branch }}
+  RELEASE_BRANCH: ${{ github.event.inputs.release_branch }}
+  DEVELOP_BRANCH: ${{ github.event.inputs.develop_branch }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: target_repo
+
+      - name: Configure Git identity
+        working-directory: target_repo
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout release branch
+        working-directory: target_repo
+        run: |
+          git checkout ${{ inputs.release_branch }}
+          git pull origin ${{ inputs.release_branch }}
+
+      - name: Get release version
+        working-directory: target_repo
+        id: get_version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0)
+          echo "VERSION=$VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create PR release -> main
+        working-directory: target_repo
+        id: pr_release_main
+        run: |
+          PR1=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.event.inputs.repo_url }}/pulls \
+            -d "{
+              \"title\": \"Sync release -> main (Deploy ${{ steps.get_version.outputs.VERSION }})\",
+              \"base\": \"${{ inputs.main_branch }}\",
+              \"head\": \"${{ inputs.release_branch }}\"
+            }" | jq -r .number)
+          if [[ "$PR1" == "null" ]]; then
+            echo "ERROR: failed to create PR release -> main"
+            exit 1
+          fi
+          echo "PR1=$PR1" >> $GITHUB_OUTPUT
+
+      - name: Merge PR release -> main
+        run: |
+          curl -s -X PUT \
+            -H "Authorization: Bearer ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.event.inputs.repo_url }}/pulls/${{ steps.pr_release_main.outputs.PR1 }}/merge \
+            -d '{"merge_method":"merge", "commit_title":"Sync release -> main", "commit_message":"Merged automatically by GitHub Actions."}'
+
+      - name: Create PR main -> develop
+        working-directory: target_repo
+        id: pr_main_develop
+        run: |
+          git fetch
+          PR2=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.event.inputs.repo_url }}/pulls \
+            -d "{
+              \"title\": \"Sync main -> develop (Post-deploy ${{ steps.get_version.outputs.VERSION }})\",
+              \"base\": \"${{ inputs.develop_branch }}\",
+              \"head\": \"${{ inputs.main_branch }}\"
+            }" | jq -r .number)
+          if [[ "$PR2" == "null" ]]; then
+            echo "ERROR: failed to create PR main -> develop"
+            exit 1
+          fi
+          echo "PR2=$PR2" >> $GITHUB_OUTPUT
+
+      - name: Merge PR main -> develop
+        run: |
+          curl -s -X PUT \
+            -H "Authorization: Bearer ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.event.inputs.repo_url }}/pulls/${{ steps.pr_main_develop.outputs.PR2 }}/merge \
+            -d '{"merge_method":"merge", "commit_title":"Sync main -> develop", "commit_message":"Merged automatically by GitHub Actions."}'
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: ${{ github.event.inputs.repo_url }}
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          make_latest: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+      - name: Done
+        run: echo "🎉 Deploy finished successfully."
