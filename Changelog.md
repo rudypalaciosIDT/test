@@ -1,4 +1,10 @@
 # Changelog
+## v1.0.4
+- [#148](https://github.com/rudypalaciosIDT/test/pull/148) [xyz-999](https://idtjira.atlassian.net/browse/xyz-999)-rudypalaciosIDT-[patch-1](https://idtjira.atlassian.net/browse/patch-1)
+- [#147](https://github.com/rudypalaciosIDT/test/pull/147) [abc-789](https://idtjira.atlassian.net/browse/abc-789)-rudypalaciosIDT-[patch-1](https://idtjira.atlassian.net/browse/patch-1)
+
+**Full Changelog**: https://github.com/rudypalaciosIDT/test/commits/v1.0.4
+
 ## v1.0.3
 - [#143](https://github.com/rudypalaciosIDT/test/pull/143) [xyz-123](https://idtjira.atlassian.net/browse/xyz-123)-rudypalaciosIDT-[patch-1](https://idtjira.atlassian.net/browse/patch-1)
 
